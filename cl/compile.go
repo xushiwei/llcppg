@@ -172,12 +172,11 @@ func compileFunc(ctx *blockCtx, fn clang.Cursor) {
 		return
 	}
 
-	fnName := clang.String(fn)
+	origName := clang.String(fn)
 	if debugCompileDecl {
-		log.Println("func", fnName, "-", clang.String(fn.Type()))
+		log.Println("func", origName, "-", clang.String(fn.Type()))
 	}
-	origName := fnName
-	rewritten := ctx.getPubName(&fnName)
+	fnName, rewritten := ctx.getPubName(origName)
 	n := fn.NumArguments()
 	var params []*types.Var
 	var results *types.Tuple
