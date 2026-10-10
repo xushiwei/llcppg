@@ -285,7 +285,7 @@ func initClassTypeEx(ctx *pkgCtx, typDecl typDecl, this *classCtx, goName string
 	})
 }
 
-func emitClass(ctx *pkgCtx, cls clang.Cursor, goName string, parent *scopeCtx) *types.Named {
+func emitClass(ctx *pkgCtx, cls clang.Cursor, goName string, parent *scopeCtx) (*types.Named, bool) {
 	typDecl := newType(ctx, cls, "", goName)
 	this := &classCtx{
 		decl:      cls,
@@ -293,9 +293,11 @@ func emitClass(ctx *pkgCtx, cls clang.Cursor, goName string, parent *scopeCtx) *
 		parent:    parent,
 	}
 	if !initClassType(ctx, typDecl, this, "", goName, nil) {
-		ctx.panicf(cls, "class %s: unsupported feature, failed to initialize class", goName)
+		ctx.errorf(cls, "class %s: unsupported feature, failed to initialize class", goName)
+		typDecl.Delete()
+		return nil, false
 	}
-	return typDecl.Type()
+	return typDecl.Type(), true
 }
 
 func loadClassMember(ctx *pkgCtx, pkg *types.Package, this *classCtx, goName string, decl clang.Cursor, feats *int) {
@@ -305,6 +307,7 @@ func loadClassMember(ctx *pkgCtx, pkg *types.Package, this *classCtx, goName str
 		// noop: have been preloaded in newClassCtx
 
 	case lc.Cursor_FieldDecl:
+		var ok bool
 		var fldType types.Type
 		var ft = decl.Type()
 		if ftd := ft.Declaration(); ftd.IsAnonymous() != 0 {
@@ -313,7 +316,11 @@ func loadClassMember(ctx *pkgCtx, pkg *types.Package, this *classCtx, goName str
 				if ftd.Kind == lc.Cursor_UnionDecl {
 					fldType = emitUnion(ctx, ftd, ctx.nextAnonName())
 				} else {
-					fldType = emitClass(ctx, ftd, ctx.nextAnonName(), this.scope())
+					fldType, ok = emitClass(ctx, ftd, ctx.nextAnonName(), this.scope())
+					if !ok {
+						*feats |= featExplicitIgnore
+						return
+					}
 				}
 			case lc.Type_Enum:
 				fldType = emitEnum(ctx, ftd, ctx.nextAnonName())
@@ -371,7 +378,11 @@ func loadClassMember(ctx *pkgCtx, pkg *types.Package, this *classCtx, goName str
 	case lc.Cursor_ClassDecl, lc.Cursor_StructDecl:
 		switch {
 		case decl.IsAnonymousRecordDecl() != 0:
-			hoisted := emitClass(ctx, decl, ctx.nextAnonName(), this.scope())
+			hoisted, ok := emitClass(ctx, decl, ctx.nextAnonName(), this.scope())
+			if !ok {
+				*feats |= featExplicitIgnore
+				return
+			}
 			fld := types.NewField(goNodePos(ctx, decl), pkg, hoisted.Obj().Name(), hoisted, true)
 			this.fields = append(this.fields, fld)
 		case decl.IsAnonymous() != 0:
@@ -508,7 +519,7 @@ func baseClass(ctx *pkgCtx, this *classCtx, decl clang.Cursor, feats *int) (typ 
 		}
 		return
 	}
-	ctx.panicf(decl, "baseClass %s: unknown base class - %s (%d)", cNameOf(decl), clang.String(t), t.Kind)
+	ctx.panicf(decl, "baseClass %s: unknown base class - %s (%d)", cTypeName(t), clang.String(t), t.Kind)
 	return
 }
 
