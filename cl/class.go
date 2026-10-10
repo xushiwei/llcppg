@@ -305,7 +305,6 @@ func loadClassMember(ctx *pkgCtx, pkg *types.Package, this *classCtx, goName str
 		// noop: have been preloaded in newClassCtx
 
 	case lc.Cursor_FieldDecl:
-		var ok bool
 		var fldType types.Type
 		var ft = decl.Type()
 		if ftd := ft.Declaration(); ftd.IsAnonymous() != 0 {
@@ -313,6 +312,7 @@ func loadClassMember(ctx *pkgCtx, pkg *types.Package, this *classCtx, goName str
 			case ftd.Kind == lc.Cursor_UnionDecl:
 				fldType = toType(ctx, pkg, ft, flagIsVarDef, this.scope())
 			case ft.Kind == lc.Type_Record:
+				var ok bool
 				fldType, ok = emitClass(ctx, ftd, ctx.nextAnonName(), this.scope())
 				if !ok {
 					*feats |= featExplicitIgnore
