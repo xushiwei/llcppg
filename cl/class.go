@@ -293,8 +293,6 @@ func emitClass(ctx *pkgCtx, cls clang.Cursor, goName string, parent *scopeCtx) (
 		parent:    parent,
 	}
 	if !initClassType(ctx, typDecl, this, "", goName, nil) {
-		ctx.errorf(cls, "class %s: unsupported feature, failed to initialize class", goName)
-		typDecl.Delete()
 		return nil, false
 	}
 	return typDecl.Type(), true
